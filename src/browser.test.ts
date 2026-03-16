@@ -50,6 +50,7 @@ describe('browser helpers', () => {
   });
 
   it('builds Playwright MCP args with kebab-case executable path', () => {
+    delete process.env.OPENCLI_HEADLESS;
     expect(__test__.buildMcpArgs({
       mcpPath: '/tmp/cli.js',
       executablePath: '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
@@ -66,6 +67,30 @@ describe('browser helpers', () => {
       '/tmp/cli.js',
       '--extension',
     ]);
+  });
+
+  it('builds headless MCP args when OPENCLI_HEADLESS=1', () => {
+    process.env.OPENCLI_HEADLESS = '1';
+    try {
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--headless',
+      ]);
+
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+        executablePath: '/usr/bin/chromium',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--headless',
+        '--executable-path',
+        '/usr/bin/chromium',
+      ]);
+    } finally {
+      delete process.env.OPENCLI_HEADLESS;
+    }
   });
 
   it('times out slow promises', async () => {

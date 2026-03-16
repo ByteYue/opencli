@@ -349,6 +349,7 @@ export class PlaywrightMCP {
     return new Promise<Page>((resolve, reject) => {
       const isDebug = process.env.DEBUG?.includes('opencli:mcp');
       const debugLog = (msg: string) => isDebug && console.error(`[opencli:mcp] ${msg}`);
+      const isHeadless = process.env.OPENCLI_HEADLESS === '1';
       const extensionToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
       const tokenFingerprint = getTokenFingerprint(extensionToken);
       let stderrBuffer = '';
@@ -363,7 +364,7 @@ export class PlaywrightMCP {
         reject(formatBrowserConnectError({
           kind,
           timeout,
-          hasExtensionToken: !!extensionToken,
+          hasExtensionToken: isHeadless || !!extensionToken,
           tokenFingerprint,
           stderr: stderrBuffer,
           exitCode: extra.exitCode,
@@ -382,7 +383,7 @@ export class PlaywrightMCP {
       const timer = setTimeout(() => {
         debugLog('Connection timed out');
         settleError(inferConnectFailureKind({
-          hasExtensionToken: !!extensionToken,
+          hasExtensionToken: isHeadless || !!extensionToken,
           stderr: stderrBuffer,
         }));
       }, timeout * 1000);
@@ -392,7 +393,8 @@ export class PlaywrightMCP {
         executablePath: process.env.OPENCLI_BROWSER_EXECUTABLE_PATH,
       });
       if (process.env.OPENCLI_VERBOSE) {
-        console.error(`[opencli] Extension token: ${extensionToken ? `configured (fingerprint ${tokenFingerprint})` : 'missing'}`);
+        console.error(`[opencli] Mode: ${isHeadless ? 'headless' : 'extension'}`);
+        if (!isHeadless) console.error(`[opencli] Extension token: ${extensionToken ? `configured (fingerprint ${tokenFingerprint})` : 'missing'}`);
       }
       debugLog(`Spawning node ${mcpArgs.join(' ')}`);
 
@@ -610,7 +612,13 @@ function appendLimited(current: string, chunk: string, limit: number): string {
 }
 
 function buildMcpArgs(input: { mcpPath: string; executablePath?: string | null }): string[] {
-  const args = [input.mcpPath, '--extension'];
+  const headless = process.env.OPENCLI_HEADLESS === '1';
+  const args = [input.mcpPath];
+  if (headless) {
+    args.push('--headless');
+  } else {
+    args.push('--extension');
+  }
   if (input.executablePath) {
     args.push('--executable-path', input.executablePath);
   }
