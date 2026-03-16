@@ -27,8 +27,8 @@ describe('public commands E2E', () => {
     expect(data[0]).toHaveProperty('title');
   }, 30_000);
 
-  it('github search returns repos', async () => {
-    const { stdout, code } = await runCli(['github', 'search', '--keyword', 'playwright', '--limit', '3', '-f', 'json']);
+  it('v2ex hot returns topics (public API)', async () => {
+    const { stdout, code } = await runCli(['v2ex', 'hot', '--limit', '3', '-f', 'json']);
     expect(code).toBe(0);
     const data = parseJsonOutput(stdout);
     expect(Array.isArray(data)).toBe(true);

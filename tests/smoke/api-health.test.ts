@@ -32,8 +32,8 @@ describe('API health smoke tests', () => {
     }
   }, 30_000);
 
-  it('github search API is responsive', async () => {
-    const { stdout, code } = await runCli(['github', 'search', '--keyword', 'cli', '--limit', '3', '-f', 'json']);
+  it('v2ex latest API is responsive', async () => {
+    const { stdout, code } = await runCli(['v2ex', 'latest', '--limit', '3', '-f', 'json']);
     expect(code).toBe(0);
     const data = parseJsonOutput(stdout);
     expect(data.length).toBeGreaterThanOrEqual(1);
