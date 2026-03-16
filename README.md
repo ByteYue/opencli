@@ -190,9 +190,9 @@ See **[TESTING.md](./TESTING.md)** for the full testing guide, including:
 ```bash
 # Quick start
 npm run build
-npx vitest run                                     # All tests
-npx vitest run src/                                 # Unit tests only
-OPENCLI_HEADLESS=1 npx vitest run tests/e2e/        # E2E tests
+npx vitest run                              # All tests
+npx vitest run src/                          # Unit tests only
+npx vitest run tests/e2e/                    # E2E tests
 ```
 
 ## Troubleshooting

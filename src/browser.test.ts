@@ -49,49 +49,56 @@ describe('browser helpers', () => {
     expect(__test__.appendLimited('12345', '67890', 8)).toBe('34567890');
   });
 
-  it('builds Playwright MCP args with kebab-case executable path', () => {
-    delete process.env.OPENCLI_HEADLESS;
-    expect(__test__.buildMcpArgs({
-      mcpPath: '/tmp/cli.js',
-      executablePath: '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-    })).toEqual([
-      '/tmp/cli.js',
-      '--extension',
-      '--executable-path',
-      '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
-    ]);
+  it('builds extension MCP args when token is set', () => {
+    const savedToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+    process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = 'test-token';
+    try {
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+        executablePath: '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--extension',
+        '--executable-path',
+        '/mnt/c/Program Files/Google/Chrome/Application/chrome.exe',
+      ]);
 
-    expect(__test__.buildMcpArgs({
-      mcpPath: '/tmp/cli.js',
-    })).toEqual([
-      '/tmp/cli.js',
-      '--extension',
-    ]);
+      expect(__test__.buildMcpArgs({
+        mcpPath: '/tmp/cli.js',
+      })).toEqual([
+        '/tmp/cli.js',
+        '--extension',
+      ]);
+    } finally {
+      if (savedToken) {
+        process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = savedToken;
+      } else {
+        delete process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+      }
+    }
   });
 
-  it('builds headless MCP args when OPENCLI_HEADLESS=1', () => {
-    process.env.OPENCLI_HEADLESS = '1';
+  it('builds standalone MCP args when no extension token is set', () => {
+    const savedToken = process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
+    delete process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN;
     try {
-      const args1 = __test__.buildMcpArgs({
+      // Without token: no --extension, no --headless — browser launches in headed mode
+      expect(__test__.buildMcpArgs({
         mcpPath: '/tmp/cli.js',
-      });
-      expect(args1[0]).toBe('/tmp/cli.js');
-      expect(args1[1]).toBe('--headless');
-      // Should include --init-script for stealth when stealth.js exists
-      expect(args1).toContain('--init-script');
-      expect(args1.some(a => a.endsWith('stealth.js'))).toBe(true);
+      })).toEqual([
+        '/tmp/cli.js',
+      ]);
 
-      const args2 = __test__.buildMcpArgs({
+      expect(__test__.buildMcpArgs({
         mcpPath: '/tmp/cli.js',
         executablePath: '/usr/bin/chromium',
-      });
-      expect(args2[0]).toBe('/tmp/cli.js');
-      expect(args2[1]).toBe('--headless');
-      expect(args2).toContain('--executable-path');
-      expect(args2).toContain('/usr/bin/chromium');
-      expect(args2).toContain('--init-script');
+      })).toEqual([
+        '/tmp/cli.js',
+        '--executable-path',
+        '/usr/bin/chromium',
+      ]);
     } finally {
-      delete process.env.OPENCLI_HEADLESS;
+      if (savedToken) process.env.PLAYWRIGHT_MCP_EXTENSION_TOKEN = savedToken;
     }
   });
 

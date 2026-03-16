@@ -9,9 +9,8 @@
 - [本地运行测试](#本地运行测试)
 - [如何添加新测试](#如何添加新测试)
 - [CI/CD 流水线](#cicd-流水线)
-- [Headless 模式](#headless-模式)
-- [Stealth 反检测](#stealth-反检测)
-- [在 CI 中使用真实 Chrome](#在-ci-中使用真实-chrome)
+- [浏览器模式](#浏览器模式)
+- [站点兼容性](#站点兼容性)
 
 ---
 
@@ -24,7 +23,7 @@ tests/
 ├── e2e/                           # E2E 集成测试（子进程运行真实 CLI）
 │   ├── helpers.ts                 # runCli() 共享工具
 │   ├── public-commands.test.ts    # 公开 API 命令（无需浏览器）
-│   ├── browser-public.test.ts     # 浏览器命令（公开数据，headless）
+│   ├── browser-public.test.ts     # 浏览器命令（公开数据）
 │   ├── browser-auth.test.ts       # 需登录命令（graceful failure 测试）
 │   ├── management.test.ts         # 管理命令（list, validate, verify, help）
 │   └── output-formats.test.ts     # 输出格式（json/yaml/csv/md）
@@ -48,7 +47,7 @@ src/
 
 | 文件 | 覆盖内容 |
 |---|---|
-| `browser.test.ts` | JSON-RPC、tab 管理、headless/extension 模式切换 |
+| `browser.test.ts` | JSON-RPC、tab 管理、extension/standalone 模式切换 |
 | `engine.test.ts` | 命令发现与执行 |
 | `registry.test.ts` | 命令注册与策略分配 |
 | `output.test.ts` | 输出格式渲染 |
@@ -89,7 +88,7 @@ npm run build         # 编译（E2E 测试需要 dist/main.js）
 npx vitest run src/
 
 # 全部 E2E 测试（会真实调用外部 API）
-OPENCLI_HEADLESS=1 npx vitest run tests/e2e/
+npx vitest run tests/e2e/
 
 # 单个测试文件
 npx vitest run tests/e2e/management.test.ts
@@ -98,19 +97,18 @@ npx vitest run tests/e2e/management.test.ts
 npx vitest run
 
 # 烟雾测试
-OPENCLI_HEADLESS=1 npx vitest run tests/smoke/
+npx vitest run tests/smoke/
 
 # watch 模式（开发时推荐）
 npx vitest src/
 ```
 
-> **注意**：E2E 测试中的浏览器命令需要设置 `OPENCLI_HEADLESS=1`，否则会尝试连接已有 Chrome。如果你本地有 Chrome 和 MCP 扩展，也可以不设此变量、改用真实浏览器测试。
-
 ### 浏览器命令本地测试须知
 
-- `browser-public.test.ts` 中的命令使用 `tryBrowserCommand()`，站点反爬导致失败时不会报错
-- `browser-auth.test.ts` 中的命令验证的是 **graceful failure**（没 crash 就算通过）
-- 如需测试完整登录态功能，在本机保持 Chrome 登录态，不设 `OPENCLI_HEADLESS`，手动跑对应测试
+- 无 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 时，opencli 自动启动一个独立浏览器实例
+- `browser-public.test.ts` 使用 `tryBrowserCommand()`，站点反爬导致空数据时 warn + pass
+- `browser-auth.test.ts` 验证 **graceful failure**（不 crash 不 hang 即通过）
+- 如需测试完整登录态，保持 Chrome 登录态 + 设置 `PLAYWRIGHT_MCP_EXTENSION_TOKEN`，手动跑对应测试
 
 ---
 
@@ -148,37 +146,13 @@ it('producthunt me fails gracefully without login', async () => {
 }, 60_000);
 ```
 
-### 新增 TS Adapter（如 `src/clis/producthunt/trending.ts`）
-
-同上，根据是否需要浏览器 / 是否需要登录选择测试文件。
-
 ### 新增管理命令（如 `opencli export`）
 
-在 `tests/e2e/management.test.ts` 添加测试：
-
-```typescript
-it('export produces output', async () => {
-  const { stdout, code } = await runCli(['export', '--site', 'hackernews']);
-  expect(code).toBe(0);
-  expect(stdout.length).toBeGreaterThan(0);
-});
-```
+在 `tests/e2e/management.test.ts` 添加测试。
 
 ### 新增内部模块
 
-在 `src/` 下对应位置创建 `*.test.ts`：
-
-```typescript
-// src/mymodule.test.ts
-import { describe, it, expect } from 'vitest';
-import { myFunction } from './mymodule.js';
-
-describe('mymodule', () => {
-  it('does the thing', () => {
-    expect(myFunction()).toBe('expected');
-  });
-});
-```
+在 `src/` 下对应位置创建 `*.test.ts`。
 
 ### 决策流程图
 
@@ -196,14 +170,21 @@ describe('mymodule', () => {
 
 ## CI/CD 流水线
 
-`.github/workflows/ci.yml` 包含 4 个 Job：
+### ci.yml（主流水线）
 
 | Job | 触发条件 | 内容 |
 |---|---|---|
 | **build** | push/PR to main,dev | typecheck + build |
 | **unit-test** | push/PR to main,dev | 单元测试，2 shard 并行 |
-| **e2e-test** | push/PR to main,dev | 安装 Chromium + E2E 测试 |
-| **smoke-test** | 每周一 08:00 UTC / 手动 | 外部 API 健康检查 |
+| **smoke-test** | 每周一 08:00 UTC / 手动 | xvfb + real Chrome，外部 API 健康检查 |
+
+### e2e-headed.yml（E2E 测试）
+
+| Job | 触发条件 | 内容 |
+|---|---|---|
+| **e2e-headed** | push/PR to main,dev | xvfb + real Chrome，全部 E2E 测试 |
+
+E2E 使用 `browser-actions/setup-chrome` 安装真实 Chrome，配合 `xvfb-run` 提供虚拟显示器，以 headed 模式运行浏览器。
 
 ### Sharding
 
@@ -217,98 +198,36 @@ steps:
   - run: npx vitest run src/ --shard=${{ matrix.shard }}/2
 ```
 
-测试增多后可将分片扩展为 3 或 4。
-
 ---
 
-## Headless 模式
+## 浏览器模式
 
-设置环境变量 `OPENCLI_HEADLESS=1` 后，`@playwright/mcp` 使用 `--headless` 而非 `--extension` 启动，自行管理一个 headless Chromium 实例。
+opencli 根据 `PLAYWRIGHT_MCP_EXTENSION_TOKEN` 环境变量自动选择模式：
 
-| 环境变量 | 行为 |
-|---|---|
-| 未设置（默认） | `--extension` 模式：连接已有 Chrome + MCP 扩展 |
-| `OPENCLI_HEADLESS=1` | `--headless` 模式：自启 headless Chromium + stealth 注入 |
-
-CI 中始终使用 headless 模式。本地开发时按需选择。
-
----
-
-## Stealth 反检测
-
-### 工作原理
-
-Headless 模式自动注入 `src/stealth.js`（通过 `@playwright/mcp --init-script`），在页面加载前 patch：
-
-| 检测点 | 标准 Headless | Stealth 处理 |
-|---|---|---|
-| `navigator.webdriver` | `true`（暴露自动化） | 删除该属性 |
-| `window.chrome` | 缺失 | 注入 `chrome.runtime` |
-| `navigator.permissions` | 异常行为 | Proxy 到原生实现 |
-| `navigator.languages` | `['en-US']` | `['zh-CN', 'zh', 'en-US', 'en']` |
-
-### 站点兼容性（实测）
-
-| 站点 | Headless 无 Stealth | Headless + Stealth | 检测机制 |
+| 条件 | 模式 | MCP 参数 | 使用场景 |
 |---|---|---|---|
-| bilibili | `[]` 或部分数据 | ✅ 返回完整数据 | JS 级别检测 |
-| hackernews, bbc | ✅ | ✅ | 无反爬 |
-| v2ex | ✅ | ✅ | 公开 API |
-| zhihu | `[]` | `[]` | WebGL/SwiftShader 指纹 |
-| xiaohongshu | `[]` | `[]` | 深度浏览器指纹 |
+| Token 已设置 | Extension 模式 | `--extension` | 本地用户，连接已登录的 Chrome |
+| Token 未设置 | Standalone 模式 | （无特殊 flag） | CI 或无扩展环境，自启浏览器 |
 
-### 为什么部分站点仍然被检测？
-
-Stealth.js 只能做 **JavaScript 级别** 的 patch。zhihu、xiaohongshu 等站点检测的是更底层的特征：
-
-- **WebGL 渲染器**：Headless Chromium 用 SwiftShader（软件渲染器），真实 Chrome 用 GPU（如 "ANGLE (Apple M2)"）
-- **Canvas 指纹**：软件渲染产生的像素和 GPU 渲染不同
-- **TLS 指纹**：Chromium 和 Chrome 的 TLS ClientHello 略有差异
-
-要绕过这些需要 `rebrowser-playwright`（二进制级别补丁），但它要求 `headless: false` + 真实 Chrome，无法在 GitHub Actions headless CI 中直接使用。
-
-当前策略：**stealth 能帮的就帮，帮不了的 warn + pass**，不影响 CI 绿灯。
-
----
-
-## 在 CI 中使用真实 Chrome
-
-> GitHub Actions `ubuntu-latest` **默认不带 Chrome**，但可以通过 Action 安装。
-
-### 方案对比
-
-| 方案 | 安装方式 | 模式 | 反检测效果 | 复杂度 |
-|---|---|---|---|---|
-| **当前方案** | `npx playwright install chromium` | headless + stealth.js | 🟡 JS 级别 | 低 |
-| **真实 Chrome headless** | `browser-actions/setup-chrome` | headless (`--browser chrome`) | 🟡 稍好（真 Chrome UA） | 低 |
-| **真实 Chrome headed (xvfb)** | `browser-actions/setup-chrome` + `xvfb-run` | headed (虚拟显示) | 🟢 接近真实浏览器 | 中 |
-| **Self-hosted Runner** | 自建服务器 + 登录态 | headed / extension | 🟢 完全真实 | 高 |
-
-### 升级到真实 Chrome（如果需要）
-
-在 CI workflow 中替换 Chromium 安装步骤：
+CI 中使用 `OPENCLI_BROWSER_EXECUTABLE_PATH` 指定真实 Chrome 路径：
 
 ```yaml
-# 方案 A: 真实 Chrome headless（简单，效果有限提升）
-- uses: browser-actions/setup-chrome@v1
-  with:
-    chrome-version: stable
-- run: npx vitest run tests/e2e/ --reporter=verbose
-  env:
-    OPENCLI_HEADLESS: '1'
-    OPENCLI_BROWSER_EXECUTABLE_PATH: chrome  # 指向安装的 Chrome
-
-# 方案 B: 真实 Chrome headed + xvfb（效果最好，但更重）
-- uses: browser-actions/setup-chrome@v1
-  with:
-    chrome-version: stable
-- run: |
-    sudo apt-get install -y xvfb
-    xvfb-run --auto-servernum npx vitest run tests/e2e/ --reporter=verbose
-  env:
-    OPENCLI_HEADLESS: '1'
-    OPENCLI_BROWSER_EXECUTABLE_PATH: chrome
+env:
+  OPENCLI_BROWSER_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}
 ```
 
-> **注意**：即使用真实 Chrome，在美国 GitHub runner 上访问中国站点仍可能因地域限制返回空数据。这类问题需要 self-hosted runner 或代理解决。
+---
 
+## 站点兼容性
+
+在 GitHub Actions 美国 runner 上，部分站点因地域限制或登录要求返回空数据。E2E 测试对这些站点使用 warn + pass 策略，不影响 CI 绿灯。
+
+| 站点 | CI 状态 | 限制原因 |
+|---|---|---|
+| hackernews, bbc, v2ex | ✅ 返回数据 | 无限制 |
+| yahoo-finance | ✅ 返回数据 | 无限制 |
+| bilibili, zhihu, weibo, xiaohongshu | ⚠️ 空数据 | 地域限制（中国站点） |
+| reddit, twitter, youtube | ⚠️ 空数据 | 需登录或 cookie |
+| smzdm, boss, ctrip, coupang, xueqiu | ⚠️ 空数据 | 地域限制 / 需登录 |
+
+> 使用 self-hosted runner（国内服务器）可解决地域限制问题。

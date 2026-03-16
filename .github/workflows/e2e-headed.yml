@@ -44,5 +44,4 @@ jobs:
           xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
             npx vitest run tests/e2e/ --reporter=verbose
         env:
-          OPENCLI_HEADLESS: '1'
           OPENCLI_BROWSER_EXECUTABLE_PATH: ${{ steps.setup-chrome.outputs.chrome-path }}

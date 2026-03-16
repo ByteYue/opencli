@@ -21,7 +21,7 @@ export interface CliResult {
 
 /**
  * Run `opencli` as a child process with the given arguments.
- * Automatically sets OPENCLI_HEADLESS=1 for CI compatibility.
+ * Without PLAYWRIGHT_MCP_EXTENSION_TOKEN, opencli auto-launches its own browser.
  */
 export async function runCli(
   args: string[],
@@ -34,7 +34,6 @@ export async function runCli(
       timeout,
       env: {
         ...process.env,
-        OPENCLI_HEADLESS: '1',
         // Prevent chalk colors from polluting test assertions
         FORCE_COLOR: '0',
         NO_COLOR: '1',
