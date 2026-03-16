@@ -10,6 +10,8 @@
 - [如何添加新测试](#如何添加新测试)
 - [CI/CD 流水线](#cicd-流水线)
 - [Headless 模式](#headless-模式)
+- [Stealth 反检测](#stealth-反检测)
+- [在 CI 中使用真实 Chrome](#在-ci-中使用真实-chrome)
 
 ---
 
@@ -226,6 +228,87 @@ steps:
 | 环境变量 | 行为 |
 |---|---|
 | 未设置（默认） | `--extension` 模式：连接已有 Chrome + MCP 扩展 |
-| `OPENCLI_HEADLESS=1` | `--headless` 模式：自启 headless Chromium |
+| `OPENCLI_HEADLESS=1` | `--headless` 模式：自启 headless Chromium + stealth 注入 |
 
 CI 中始终使用 headless 模式。本地开发时按需选择。
+
+---
+
+## Stealth 反检测
+
+### 工作原理
+
+Headless 模式自动注入 `src/stealth.js`（通过 `@playwright/mcp --init-script`），在页面加载前 patch：
+
+| 检测点 | 标准 Headless | Stealth 处理 |
+|---|---|---|
+| `navigator.webdriver` | `true`（暴露自动化） | 删除该属性 |
+| `window.chrome` | 缺失 | 注入 `chrome.runtime` |
+| `navigator.permissions` | 异常行为 | Proxy 到原生实现 |
+| `navigator.languages` | `['en-US']` | `['zh-CN', 'zh', 'en-US', 'en']` |
+
+### 站点兼容性（实测）
+
+| 站点 | Headless 无 Stealth | Headless + Stealth | 检测机制 |
+|---|---|---|---|
+| bilibili | `[]` 或部分数据 | ✅ 返回完整数据 | JS 级别检测 |
+| hackernews, bbc | ✅ | ✅ | 无反爬 |
+| v2ex | ✅ | ✅ | 公开 API |
+| zhihu | `[]` | `[]` | WebGL/SwiftShader 指纹 |
+| xiaohongshu | `[]` | `[]` | 深度浏览器指纹 |
+
+### 为什么部分站点仍然被检测？
+
+Stealth.js 只能做 **JavaScript 级别** 的 patch。zhihu、xiaohongshu 等站点检测的是更底层的特征：
+
+- **WebGL 渲染器**：Headless Chromium 用 SwiftShader（软件渲染器），真实 Chrome 用 GPU（如 "ANGLE (Apple M2)"）
+- **Canvas 指纹**：软件渲染产生的像素和 GPU 渲染不同
+- **TLS 指纹**：Chromium 和 Chrome 的 TLS ClientHello 略有差异
+
+要绕过这些需要 `rebrowser-playwright`（二进制级别补丁），但它要求 `headless: false` + 真实 Chrome，无法在 GitHub Actions headless CI 中直接使用。
+
+当前策略：**stealth 能帮的就帮，帮不了的 warn + pass**，不影响 CI 绿灯。
+
+---
+
+## 在 CI 中使用真实 Chrome
+
+> GitHub Actions `ubuntu-latest` **默认不带 Chrome**，但可以通过 Action 安装。
+
+### 方案对比
+
+| 方案 | 安装方式 | 模式 | 反检测效果 | 复杂度 |
+|---|---|---|---|---|
+| **当前方案** | `npx playwright install chromium` | headless + stealth.js | 🟡 JS 级别 | 低 |
+| **真实 Chrome headless** | `browser-actions/setup-chrome` | headless (`--browser chrome`) | 🟡 稍好（真 Chrome UA） | 低 |
+| **真实 Chrome headed (xvfb)** | `browser-actions/setup-chrome` + `xvfb-run` | headed (虚拟显示) | 🟢 接近真实浏览器 | 中 |
+| **Self-hosted Runner** | 自建服务器 + 登录态 | headed / extension | 🟢 完全真实 | 高 |
+
+### 升级到真实 Chrome（如果需要）
+
+在 CI workflow 中替换 Chromium 安装步骤：
+
+```yaml
+# 方案 A: 真实 Chrome headless（简单，效果有限提升）
+- uses: browser-actions/setup-chrome@v1
+  with:
+    chrome-version: stable
+- run: npx vitest run tests/e2e/ --reporter=verbose
+  env:
+    OPENCLI_HEADLESS: '1'
+    OPENCLI_BROWSER_EXECUTABLE_PATH: chrome  # 指向安装的 Chrome
+
+# 方案 B: 真实 Chrome headed + xvfb（效果最好，但更重）
+- uses: browser-actions/setup-chrome@v1
+  with:
+    chrome-version: stable
+- run: |
+    sudo apt-get install -y xvfb
+    xvfb-run --auto-servernum npx vitest run tests/e2e/ --reporter=verbose
+  env:
+    OPENCLI_HEADLESS: '1'
+    OPENCLI_BROWSER_EXECUTABLE_PATH: chrome
+```
+
+> **注意**：即使用真实 Chrome，在美国 GitHub runner 上访问中国站点仍可能因地域限制返回空数据。这类问题需要 self-hosted runner 或代理解决。
+
