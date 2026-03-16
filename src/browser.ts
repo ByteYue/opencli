@@ -616,6 +616,11 @@ function buildMcpArgs(input: { mcpPath: string; executablePath?: string | null }
   const args = [input.mcpPath];
   if (headless) {
     args.push('--headless');
+    // Inject stealth init script to reduce bot detection in headless mode
+    const stealthPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 'stealth.js');
+    if (fs.existsSync(stealthPath)) {
+      args.push('--init-script', stealthPath);
+    }
   } else {
     args.push('--extension');
   }

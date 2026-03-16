@@ -72,22 +72,24 @@ describe('browser helpers', () => {
   it('builds headless MCP args when OPENCLI_HEADLESS=1', () => {
     process.env.OPENCLI_HEADLESS = '1';
     try {
-      expect(__test__.buildMcpArgs({
+      const args1 = __test__.buildMcpArgs({
         mcpPath: '/tmp/cli.js',
-      })).toEqual([
-        '/tmp/cli.js',
-        '--headless',
-      ]);
+      });
+      expect(args1[0]).toBe('/tmp/cli.js');
+      expect(args1[1]).toBe('--headless');
+      // Should include --init-script for stealth when stealth.js exists
+      expect(args1).toContain('--init-script');
+      expect(args1.some(a => a.endsWith('stealth.js'))).toBe(true);
 
-      expect(__test__.buildMcpArgs({
+      const args2 = __test__.buildMcpArgs({
         mcpPath: '/tmp/cli.js',
         executablePath: '/usr/bin/chromium',
-      })).toEqual([
-        '/tmp/cli.js',
-        '--headless',
-        '--executable-path',
-        '/usr/bin/chromium',
-      ]);
+      });
+      expect(args2[0]).toBe('/tmp/cli.js');
+      expect(args2[1]).toBe('--headless');
+      expect(args2).toContain('--executable-path');
+      expect(args2).toContain('/usr/bin/chromium');
+      expect(args2).toContain('--init-script');
     } finally {
       delete process.env.OPENCLI_HEADLESS;
     }
