@@ -150,16 +150,16 @@ Each desktop adapter has its own detailed documentation with commands reference,
 
 | App | Description | Doc |
 |-----|-------------|-----|
-| **Cursor** | Control Cursor IDE — Composer, chat, code extraction | [README](./src/clis/cursor/README.md) |
-| **Codex** | Drive OpenAI Codex CLI agent headlessly | [README](./src/clis/codex/README.md) |
-| **Antigravity** | Control Antigravity Ultra from terminal | [README](./src/clis/antigravity/README.md) |
-| **ChatGPT** | Automate ChatGPT macOS desktop app | [README](./src/clis/chatgpt/README.md) |
-| **ChatWise** | Multi-LLM client (GPT-4, Claude, Gemini) | [README](./src/clis/chatwise/README.md) |
-| **Notion** | Search, read, write Notion pages | [README](./src/clis/notion/README.md) |
-| **Discord** | Discord Desktop — messages, channels, servers | [README](./src/clis/discord-app/README.md) |
-| **Feishu** | 飞书/Lark Desktop via AppleScript | [README](./src/clis/feishu/README.md) |
-| **WeChat** | 微信 Desktop via AppleScript + Accessibility | [README](./src/clis/wechat/README.md) |
-| **NeteaseMusic** | 网易云音乐 Desktop via CEF/CDP | [README](./src/clis/neteasemusic/README.md) |
+| **Cursor** | Control Cursor IDE — Composer, chat, code extraction | [Doc](./docs/adapters/desktop/cursor.md) |
+| **Codex** | Drive OpenAI Codex CLI agent headlessly | [Doc](./docs/adapters/desktop/codex.md) |
+| **Antigravity** | Control Antigravity Ultra from terminal | [Doc](./docs/adapters/desktop/antigravity.md) |
+| **ChatGPT** | Automate ChatGPT macOS desktop app | [Doc](./docs/adapters/desktop/chatgpt.md) |
+| **ChatWise** | Multi-LLM client (GPT-4, Claude, Gemini) | [Doc](./docs/adapters/desktop/chatwise.md) |
+| **Notion** | Search, read, write Notion pages | [Doc](./docs/adapters/desktop/notion.md) |
+| **Discord** | Discord Desktop — messages, channels, servers | [Doc](./docs/adapters/desktop/discord.md) |
+| **Feishu** | 飞书/Lark Desktop via AppleScript | [Doc](./docs/adapters/desktop/feishu.md) |
+| **WeChat** | 微信 Desktop via AppleScript + Accessibility | [Doc](./docs/adapters/desktop/wechat.md) |
+| **NeteaseMusic** | 网易云音乐 Desktop via CEF/CDP | [Doc](./docs/adapters/desktop/neteasemusic.md) |
 
 ## Download Support
 
