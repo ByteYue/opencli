@@ -71,6 +71,10 @@ export function installPlugin(source: string): void {
     // This is more reliable than depending on the npm-published version
     // which may lag behind the local installation.
     linkHostOpencli(targetDir);
+
+    // Transpile TS plugin files to JS so they work in production mode
+    // (node cannot load .ts files directly without tsx).
+    transpilePluginTs(targetDir);
   }
 }
 
@@ -115,13 +119,16 @@ export function listPlugins(): PluginInfo[] {
 function scanPluginCommands(dir: string): string[] {
   try {
     const files = fs.readdirSync(dir);
-    return files
-      .filter(f =>
-        f.endsWith('.yaml') || f.endsWith('.yml') ||
-        (f.endsWith('.ts') && !f.endsWith('.d.ts') && !f.endsWith('.test.ts')) ||
-        (f.endsWith('.js') && !f.endsWith('.d.js'))
-      )
-      .map(f => path.basename(f, path.extname(f)));
+    const names = new Set(
+      files
+        .filter(f =>
+          f.endsWith('.yaml') || f.endsWith('.yml') ||
+          (f.endsWith('.ts') && !f.endsWith('.d.ts') && !f.endsWith('.test.ts')) ||
+          (f.endsWith('.js') && !f.endsWith('.d.js'))
+        )
+        .map(f => path.basename(f, path.extname(f)))
+    );
+    return [...names];
   } catch {
     return [];
   }
@@ -195,6 +202,53 @@ function linkHostOpencli(pluginDir: string): void {
     log.debug(`Linked host opencli into plugin: ${targetLink} → ${hostRoot}`);
   } catch (err: any) {
     log.warn(`Failed to link host opencli into plugin: ${err.message}`);
+  }
+}
+
+/**
+ * Transpile TS plugin files to JS so they work in production mode.
+ * Uses esbuild from the host opencli's node_modules for fast single-file transpilation.
+ */
+function transpilePluginTs(pluginDir: string): void {
+  try {
+    // Resolve esbuild binary from the host opencli's node_modules
+    const thisFile = new URL(import.meta.url).pathname;
+    const hostRoot = path.resolve(path.dirname(thisFile), '..');
+    const esbuildBin = path.join(hostRoot, 'node_modules', '.bin', 'esbuild');
+
+    if (!fs.existsSync(esbuildBin)) {
+      log.debug('esbuild not found in host node_modules, skipping TS transpilation');
+      return;
+    }
+
+    const files = fs.readdirSync(pluginDir);
+    const tsFiles = files.filter(f =>
+      f.endsWith('.ts') && !f.endsWith('.d.ts') && !f.endsWith('.test.ts')
+    );
+
+    for (const tsFile of tsFiles) {
+      const jsFile = tsFile.replace(/\.ts$/, '.js');
+      const jsPath = path.join(pluginDir, jsFile);
+
+      // Skip if .js already exists (plugin may ship pre-compiled)
+      if (fs.existsSync(jsPath)) continue;
+
+      try {
+        execSync(
+          `"${esbuildBin}" "${tsFile}" --outfile="${jsFile}" --format=esm --platform=node`,
+          {
+            cwd: pluginDir,
+            encoding: 'utf-8',
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }
+        );
+        log.debug(`Transpiled plugin file: ${tsFile} → ${jsFile}`);
+      } catch (err: any) {
+        log.warn(`Failed to transpile ${tsFile}: ${err.message}`);
+      }
+    }
+  } catch {
+    // Non-fatal: skip transpilation if anything goes wrong
   }
 }
 

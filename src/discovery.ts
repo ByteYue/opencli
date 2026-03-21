@@ -190,15 +190,24 @@ export async function discoverPlugins(): Promise<void> {
  */
 async function discoverPluginDir(dir: string, site: string): Promise<void> {
   const files = await fs.promises.readdir(dir);
+  const fileSet = new Set(files);
   const promises: Promise<any>[] = [];
   for (const file of files) {
     const filePath = path.join(dir, file);
     if (file.endsWith('.yaml') || file.endsWith('.yml')) {
       promises.push(registerYamlCli(filePath, site));
+    } else if (file.endsWith('.js') && !file.endsWith('.d.js')) {
+      promises.push(
+        import(`file://${filePath}`).catch((err: any) => {
+          log.warn(`Plugin ${site}/${file}: ${err.message}`);
+        })
+      );
     } else if (
-      (file.endsWith('.js') && !file.endsWith('.d.js')) ||
-      (file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts'))
+      file.endsWith('.ts') && !file.endsWith('.d.ts') && !file.endsWith('.test.ts')
     ) {
+      // Skip .ts if a compiled .js sibling exists (production mode can't load .ts)
+      const jsFile = file.replace(/\.ts$/, '.js');
+      if (fileSet.has(jsFile)) continue;
       promises.push(
         import(`file://${filePath}`).catch((err: any) => {
           log.warn(`Plugin ${site}/${file}: ${err.message}`);
