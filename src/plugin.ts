@@ -13,7 +13,17 @@ import { PLUGINS_DIR } from './discovery.js';
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
 
+/** Get home directory, respecting HOME environment variable for test isolation. */
+function getHomeDir(): string {
+  return process.env.HOME || process.env.USERPROFILE || os.homedir();
+}
+
 /** Path to the lock file that tracks installed plugin versions. */
+export function getLockFilePath(): string {
+  return path.join(getHomeDir(), '.opencli', 'plugins.lock.json');
+}
+
+// Legacy const for backward compatibility (computed at load time)
 export const LOCK_FILE = path.join(os.homedir(), '.opencli', 'plugins.lock.json');
 
 export interface LockEntry {
@@ -43,7 +53,7 @@ export interface ValidationResult {
 
 export function readLockFile(): Record<string, LockEntry> {
   try {
-    const raw = fs.readFileSync(LOCK_FILE, 'utf-8');
+    const raw = fs.readFileSync(getLockFilePath(), 'utf-8');
     return JSON.parse(raw) as Record<string, LockEntry>;
   } catch {
     return {};
@@ -51,8 +61,9 @@ export function readLockFile(): Record<string, LockEntry> {
 }
 
 export function writeLockFile(lock: Record<string, LockEntry>): void {
-  fs.mkdirSync(path.dirname(LOCK_FILE), { recursive: true });
-  fs.writeFileSync(LOCK_FILE, JSON.stringify(lock, null, 2) + '\n');
+  const lockPath = getLockFilePath();
+  fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+  fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
 }
 
 /** Get the HEAD commit hash of a git repo directory. */
