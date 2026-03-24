@@ -9,6 +9,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execSync, execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { PLUGINS_DIR } from './discovery.js';
 import { getErrorMessage } from './errors.js';
 import { log } from './logger.js';
@@ -383,7 +384,7 @@ function linkHostOpencli(pluginDir: string): void {
     // Determine the host opencli package root from this module's location.
     // Both dev (tsx src/plugin.ts) and prod (node dist/plugin.js) are one level
     // deep, so path.dirname + '..' always gives us the package root.
-    const thisFile = new URL(import.meta.url).pathname;
+    const thisFile = fileURLToPath(import.meta.url);
     const hostRoot = path.resolve(path.dirname(thisFile), '..');
 
     const targetLink = path.join(pluginDir, 'node_modules', '@jackwener', 'opencli');
@@ -396,8 +397,10 @@ function linkHostOpencli(pluginDir: string): void {
     // Ensure parent directory exists
     fs.mkdirSync(path.dirname(targetLink), { recursive: true });
 
-    // Create symlink
-    fs.symlinkSync(hostRoot, targetLink, 'dir');
+    // Use 'junction' on Windows (doesn't require admin privileges),
+    // 'dir' symlink on other platforms.
+    const linkType = process.platform === 'win32' ? 'junction' : 'dir';
+    fs.symlinkSync(hostRoot, targetLink, linkType);
     log.debug(`Linked host opencli into plugin: ${targetLink} → ${hostRoot}`);
   } catch (err: any) {
     log.warn(`Failed to link host opencli into plugin: ${err.message}`);
@@ -411,7 +414,7 @@ export function resolveEsbuildBin(): string | null {
   try {
     const pkgUrl = import.meta.resolve('esbuild/package.json');
     if (pkgUrl.startsWith('file://')) {
-      const pkgPath = new URL(pkgUrl).pathname;
+      const pkgPath = fileURLToPath(pkgUrl);
       const pkgRaw = fs.readFileSync(pkgPath, 'utf8');
       const pkg = JSON.parse(pkgRaw);
       if (pkg.bin && typeof pkg.bin === 'object' && pkg.bin.esbuild) {
@@ -426,7 +429,7 @@ export function resolveEsbuildBin(): string | null {
     // ignore package resolution failures
   }
 
-  const thisFile = new URL(import.meta.url).pathname;
+  const thisFile = fileURLToPath(import.meta.url);
   const hostRoot = path.resolve(path.dirname(thisFile), '..');
   const binFallback = path.join(hostRoot, 'node_modules', '.bin', 'esbuild');
   if (fs.existsSync(binFallback)) {
@@ -434,7 +437,9 @@ export function resolveEsbuildBin(): string | null {
   }
 
   try {
-    const globalBin = execSync('which esbuild', { encoding: 'utf-8', stdio: 'pipe' }).trim();
+    // Use 'where' on Windows, 'which' on Unix
+    const lookupCmd = process.platform === 'win32' ? 'where esbuild' : 'which esbuild';
+    const globalBin = execSync(lookupCmd, { encoding: 'utf-8', stdio: 'pipe' }).trim();
     if (globalBin && fs.existsSync(globalBin)) {
       return globalBin;
     }
