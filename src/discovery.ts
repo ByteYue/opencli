@@ -196,7 +196,9 @@ export async function discoverPlugins(): Promise<void> {
   try { await fs.promises.access(PLUGINS_DIR); } catch { return; }
   const entries = await fs.promises.readdir(PLUGINS_DIR, { withFileTypes: true });
   for (const entry of entries) {
-    if (!entry.isDirectory()) continue;
+    // Accept both real directories and symlinks (monorepo sub-plugins are
+    // installed as symlinks pointing into ~/.opencli/monorepos/).
+    if (!entry.isDirectory() && !entry.isSymbolicLink()) continue;
     await discoverPluginDir(path.join(PLUGINS_DIR, entry.name), entry.name);
   }
 }
